@@ -21,6 +21,7 @@ namespace Neo.Services
         public abstract string ServiceName { get; }
 
         protected bool ShowPrompt { get; set; } = true;
+        public bool ReadingPassword { get; set; } = false;
 
         private bool _running;
         private readonly CancellationTokenSource _shutdownTokenSource = new CancellationTokenSource();
@@ -155,53 +156,70 @@ namespace Neo.Services
             }
         }
 
-        public static string ReadUserInput(string prompt, bool password = false)
+        public string ReadUserInput(string prompt, bool password = false)
         {
             const string t = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
             StringBuilder sb = new StringBuilder();
             ConsoleKeyInfo key;
-            Console.Write(prompt);
-            Console.Write(": ");
 
+            if (!string.IsNullOrEmpty(prompt))
+            {
+                Console.Write(prompt + ": ");
+            }
+
+            if (password) ReadingPassword = true;
+            var prevForeground = Console.ForegroundColor;
             Console.ForegroundColor = ConsoleColor.Yellow;
 
-            do
+            if (Console.IsInputRedirected)
             {
-                key = Console.ReadKey(true);
-                if (t.IndexOf(key.KeyChar) != -1)
+                // neo-gui Console require it
+                sb.Append(Console.ReadLine());
+            }
+            else
+            {
+                do
                 {
-                    sb.Append(key.KeyChar);
-                    if (password)
-                    {
-                        Console.Write('*');
-                    }
-                    else
-                    {
-                        Console.Write(key.KeyChar);
-                    }
-                }
-                else if (key.Key == ConsoleKey.Backspace && sb.Length > 0)
-                {
-                    sb.Length--;
-                    Console.Write(key.KeyChar);
-                    Console.Write(' ');
-                    Console.Write(key.KeyChar);
-                }
-            } while (key.Key != ConsoleKey.Enter);
+                    key = Console.ReadKey(true);
 
-            Console.ForegroundColor = ConsoleColor.White;
+                    if (t.IndexOf(key.KeyChar) != -1)
+                    {
+                        sb.Append(key.KeyChar);
+                        if (password)
+                        {
+                            Console.Write('*');
+                        }
+                        else
+                        {
+                            Console.Write(key.KeyChar);
+                        }
+                    }
+                    else if (key.Key == ConsoleKey.Backspace && sb.Length > 0)
+                    {
+                        sb.Length--;
+                        Console.Write("\b \b");
+                    }
+                } while (key.Key != ConsoleKey.Enter);
+            }
+
+            Console.ForegroundColor = prevForeground;
+            if (password) ReadingPassword = false;
             Console.WriteLine();
             return sb.ToString();
         }
 
-        public static SecureString ReadSecureString(string prompt)
+        public SecureString ReadSecureString(string prompt)
         {
             const string t = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
             SecureString securePwd = new SecureString();
             ConsoleKeyInfo key;
-            Console.Write(prompt);
-            Console.Write(": ");
 
+            if (!string.IsNullOrEmpty(prompt))
+            {
+                Console.Write(prompt + ": ");
+            }
+
+            ReadingPassword = true;
             Console.ForegroundColor = ConsoleColor.Yellow;
 
             do
@@ -222,6 +240,7 @@ namespace Neo.Services
             } while (key.Key != ConsoleKey.Enter);
 
             Console.ForegroundColor = ConsoleColor.White;
+            ReadingPassword = false;
             Console.WriteLine();
             securePwd.MakeReadOnly();
             return securePwd;
@@ -306,6 +325,7 @@ namespace Neo.Services
         protected string ReadLine()
         {
             Task<string> readLineTask = Task.Run(() => Console.ReadLine());
+
             try
             {
                 readLineTask.Wait(_shutdownTokenSource.Token);
