@@ -391,7 +391,7 @@ namespace Neo.CLI
                             {
                                 // Check bad syscalls (NEO2)
 
-                                if (!InteropService.SupportedMethods().ContainsKey(ci.TokenU32))
+                                if (!InteropService.SupportedMethods().Any(u => u.Hash == ci.TokenU32))
                                 {
                                     throw new FormatException($"Syscall not found {ci.TokenU32.ToString("x2")}. Are you using a NEO2 smartContract?");
                                 }
@@ -408,7 +408,7 @@ namespace Neo.CLI
             scriptHash = file.ScriptHash;
             using (ScriptBuilder sb = new ScriptBuilder())
             {
-                sb.EmitSysCall(InteropService.Neo_Contract_Create, file.Script, manifest.ToJson().ToString());
+                sb.EmitSysCall(InteropService.Contract.Create, file.Script, manifest.ToJson().ToString());
                 return sb.ToArray();
             }
         }
@@ -574,7 +574,6 @@ namespace Neo.CLI
                 Parallel.For(0, count, (i) =>
                 {
                     WalletAccount account = CurrentWallet.CreateAccount();
-                    addresses.Add(account.Address);
                     lock (addresses)
                     {
                         addresses.Add(account.Address);
