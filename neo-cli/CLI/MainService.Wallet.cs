@@ -311,7 +311,8 @@ namespace Neo.CLI
                         type = "Deployed-Nonstandard";
                     }
 
-                    Console.WriteLine($"{contract.Address}\t{type}");
+                    Console.WriteLine($"{"   Address: "}{contract.Address}\t{type}");
+                    Console.WriteLine($"{"ScriptHash: "}{contract.ScriptHash}\n");
                 }
             }
         }
@@ -480,6 +481,25 @@ namespace Neo.CLI
             {
                 Console.WriteLine("Two passwords entered are inconsistent!");
                 return;
+            }
+
+            if (CurrentWallet is NEP6Wallet wallet)
+            {
+                string backupFile = wallet.Path + ".bak";
+                if (!File.Exists(wallet.Path) || File.Exists(backupFile))
+                {
+                    Console.WriteLine("Wallet backup fail");
+                    return;
+                }
+                try
+                {
+                    File.Copy(wallet.Path, backupFile);
+                }
+                catch (IOException)
+                {
+                    Console.WriteLine("Wallet backup fail");
+                    return;
+                }
             }
 
             bool succeed = CurrentWallet.ChangePassword(oldPassword, newPassword);
