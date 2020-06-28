@@ -318,15 +318,21 @@ namespace Neo.CLI
                 throw new FileNotFoundException();
             }
 
-            if (Path.GetExtension(path) == ".db3")
+            switch (Path.GetExtension(path).ToLowerInvariant())
             {
-                CurrentWallet = UserWallet.Open(path, password);
-            }
-            else
-            {
-                NEP6Wallet nep6wallet = new NEP6Wallet(path);
-                nep6wallet.Unlock(password);
-                CurrentWallet = nep6wallet;
+                case ".db3":
+                    {
+                        CurrentWallet = UserWallet.Open(path, password);
+                        break;
+                    }
+                case ".json":
+                    {
+                        NEP6Wallet nep6wallet = new NEP6Wallet(path);
+                        nep6wallet.Unlock(password);
+                        CurrentWallet = nep6wallet;
+                        break;
+                    }
+                default: throw new NotSupportedException();
             }
         }
 
@@ -561,13 +567,13 @@ namespace Neo.CLI
                 if (showStack)
                     Console.WriteLine($"Result Stack: {new JArray(engine.ResultStack.Select(p => p.ToJson()))}");
 
-                if (engine.State.HasFlag(VMState.FAULT) || !engine.ResultStack.TryPop(out VM.Types.StackItem ret))
+                if (engine.State.HasFlag(VMState.FAULT))
                 {
                     Console.WriteLine("Engine faulted.");
                     return null;
                 }
 
-                return ret;
+                return engine.ResultStack.Pop();
             }
         }
     }
