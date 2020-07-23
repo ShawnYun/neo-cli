@@ -73,8 +73,8 @@ namespace Neo.CLI
             {
                 switch (str.ToLowerInvariant())
                 {
-                    case "neo": return SmartContract.Native.NativeContract.NEO.Hash;
-                    case "gas": return SmartContract.Native.NativeContract.GAS.Hash;
+                    case "neo": return NativeContract.NEO.Hash;
+                    case "gas": return NativeContract.GAS.Hash;
                 }
 
                 // Try to parse as UInt160
@@ -97,8 +97,8 @@ namespace Neo.CLI
                 {
                     switch (str.ToLowerInvariant())
                     {
-                        case "neo": return SmartContract.Native.NativeContract.NEO.Hash;
-                        case "gas": return SmartContract.Native.NativeContract.GAS.Hash;
+                        case "neo": return NativeContract.NEO.Hash;
+                        case "gas": return NativeContract.GAS.Hash;
                     }
 
                     // Try to parse as UInt160
@@ -270,7 +270,7 @@ namespace Neo.CLI
 
             // Basic script checks
 
-            using (var engine = new ApplicationEngine(TriggerType.Application, null, null, 0, true))
+            using (var engine = ApplicationEngine.Create(TriggerType.Application, null, null, 0, true))
             {
                 var context = engine.LoadScript(file.Script);
 
@@ -474,27 +474,22 @@ namespace Neo.CLI
         /// <param name="account">sender</param>
         private void SendTransaction(byte[] script, UInt160 account = null)
         {
-            List<Cosigner> signCollection = new List<Cosigner>();
+            Signer[] signers = System.Array.Empty<Signer>();
 
             if (account != null)
             {
                 using (SnapshotView snapshot = Blockchain.Singleton.GetSnapshot())
                 {
-                    UInt160[] accounts = CurrentWallet.GetAccounts().Where(p => !p.Lock && !p.WatchOnly).Select(p => p.ScriptHash).Where(p => NativeContract.GAS.BalanceOf(snapshot, p).Sign > 0).ToArray();
-                    foreach (var signAccount in accounts)
-                    {
-                        if (account.Equals(signAccount))
-                        {
-                            signCollection.Add(new Cosigner() { Account = signAccount });
-                            break;
-                        }
-                    }
+                    signers = CurrentWallet.GetAccounts()
+                    .Where(p => !p.Lock && !p.WatchOnly && p.ScriptHash == account && NativeContract.GAS.BalanceOf(snapshot, p.ScriptHash).Sign > 0)
+                    .Select(p => new Signer() { Account = p.ScriptHash, Scopes = WitnessScope.CalledByEntry })
+                    .ToArray();
                 }
             }
 
             try
             {
-                Transaction tx = CurrentWallet.MakeTransaction(script, account, signCollection?.ToArray());
+                Transaction tx = CurrentWallet.MakeTransaction(script, account, signers);
                 Console.WriteLine($"Invoking script with: '{tx.Script.ToHexString()}'");
 
                 using (ApplicationEngine engine = ApplicationEngine.Run(tx.Script, tx, null, testMode: true))
@@ -505,7 +500,7 @@ namespace Neo.CLI
                     Console.WriteLine();
                     if (engine.State.HasFlag(VMState.FAULT))
                     {
-                        Console.WriteLine("Engine faulted.");
+                        Console.WriteLine("Error: " + GetExceptionMessage(engine.FaultException));
                         return;
                     }
                 }
@@ -517,9 +512,9 @@ namespace Neo.CLI
 
                 SignAndSendTx(tx);
             }
-            catch (InvalidOperationException)
+            catch (InvalidOperationException e)
             {
-                Console.WriteLine("Error: insufficient balance.");
+                Console.WriteLine("Error: " + GetExceptionMessage(e));
                 return;
             }
 
@@ -569,12 +564,24 @@ namespace Neo.CLI
 
                 if (engine.State.HasFlag(VMState.FAULT))
                 {
-                    Console.WriteLine("Engine faulted.");
+                    Console.WriteLine("Error: " + GetExceptionMessage(engine.FaultException));
                     return null;
                 }
 
                 return engine.ResultStack.Pop();
             }
+        }
+
+        static string GetExceptionMessage(Exception exception)
+        {
+            if (exception == null) return "Engine faulted.";
+
+            if (exception.InnerException != null)
+            {
+                return exception.InnerException.Message;
+            }
+
+            return exception.Message;
         }
     }
 }
